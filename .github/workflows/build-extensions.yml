@@ -1,0 +1,75 @@
+name: Build Extensions
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Daily build
+  workflow_dispatch:
+    inputs:
+      extension:
+        description: 'Specific extension to build (leave empty for all)'
+        required: false
+      pg_version:
+        description: 'PostgreSQL version'
+        required: false
+        default: '16'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include: ${{ fromJson(needs.setup.outputs.matrix) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+
+      - name: Build Extension
+        run: ./scripts/build-extension.sh ${{ matrix.extension }} ${{ matrix.pg_version }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.extension }}-pg${{ matrix.pg_version }}
+          path: artifacts/*.tar.gz
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          tag_name: ${{ matrix.extension }}-pg${{ matrix.pg_version }}-${{ github.sha }}
+          files: artifacts/*.tar.gz
+
+    needs: setup
+
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+
+      - id: set-matrix
+        run: |
+          if [ "${{ github.event.inputs.extension }}" != "" ]; then
+            # Build specific extension
+            VERSIONS="${{ github.event.inputs.pg_version }}"
+            if [ -z "$VERSIONS" ]; then
+              VERSIONS=$(yq e ".extensions.${{ github.event.inputs.extension }}.versions[]" extensions.yml | tr '\n' ' ')
+            fi
+            matrix=$(jq -n --arg ext "${{ github.event.inputs.extension }}" --arg vers "$VERSIONS" \
+              '{extension: [$ext], pg_version: ($vers | split(" "))}')
+          else
+            # Build all extensions
+            matrix=$(yq e -o=json '.extensions | to_entries | map(.value.versions[] as $v | {"extension": .key, "pg_version": $v})' extensions.yml)
+          fi
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
