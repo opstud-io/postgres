@@ -124,6 +124,7 @@ jobs:
       - name: Set up cache directory
         run: |
           mkdir -p /tmp/.buildx-cache
+          echo '{"layers":{}}' > /tmp/.buildx-cache/index.json
 
       - name: Cache Docker layers
         if: steps.check_build.outputs.exists != 'true'
