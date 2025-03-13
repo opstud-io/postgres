@@ -9,7 +9,7 @@ on:
         description: 'Estensione specifica da costruire (lasciare vuoto per tutte)'
         required: false
       pg_version:
-        description: 'Versione PostgreSQL'
+        description: 'PostgreSQL Version'
         required: false
         default: '16'
 
@@ -72,7 +72,7 @@ jobs:
           wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
           chmod +x /usr/local/bin/yq
 
-      - name: Clone repository and extract PGRX version
+      - name: Clone repository and extract PGRX version and Extension Version
         id: extension-versions
         run: |
           WORK_DIR="build/${{ matrix.extension }}"

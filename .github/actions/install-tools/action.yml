@@ -2,16 +2,25 @@ name: 'Install cached packages'
 runs:
   using: "composite"
   steps:
+    - name: Create cache directories
+      shell: bash
+      run: |
+        sudo mkdir -p /opt/cache/apt-lists
+        sudo chown -R runner:runner /opt/cache
+
     - name: Cache apt packages
       id: cache-apt
       uses: actions/cache@v4
       with:
-        path: /var/lib/apt/lists
+        path: /opt/cache/apt-lists
         key: ${{ runner.os }}-apt-1.0
 
     - name: Install git
       shell: bash
       run: |
+        if [ -d "/opt/cache/apt-lists" ] && [ -n "$(ls -A /opt/cache/apt-lists)" ]; then
+          sudo cp -r /opt/cache/apt-lists/* /var/lib/apt/lists/
+        fi
         sudo apt-get update
         sudo apt-get install -y build-essential \
             curl \
@@ -19,16 +28,19 @@ runs:
             jq \
             wget \
             python3-pip
+        sudo cp -r /var/lib/apt/lists/* /opt/cache/apt-lists/
 
     - name: Cache yq binary
       id: cache-yq
       uses: actions/cache@v4
       with:
-        path: /usr/local/bin/yq
+        path: /opt/cache/yq
         key: ${{ runner.os }}-yq-latest-1.0
 
     - name: Install yq
       shell: bash
       run: |
-        sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
-        sudo chmod +x /usr/local/bin/yq
+        sudo mkdir -p /opt/cache/yq
+        sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /opt/cache/yq/yq
+        sudo chmod +x /opt/cache/yq/yq
+        sudo cp /opt/cache/yq/yq /usr/local/bin/yq
