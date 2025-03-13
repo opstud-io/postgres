@@ -120,21 +120,7 @@ jobs:
           driver-opts: |
             image=moby/buildkit:latest
           buildkitd-flags: --debug
-
-      - name: Set up cache directory
-        run: |
-          mkdir -p /tmp/.buildx-cache
-          echo '{"layers":{},"manifests":{"latest":{"layers":[]}}}' > /tmp/.buildx-cache/index.json
-
-      - name: Cache Docker layers
-        if: steps.check_build.outputs.exists != 'true'
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-pgrx${{ steps.extension-versions.outputs.pgrx_version }}-pg${{ matrix.pg_version }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-pgrx${{ steps.pgrx-version.outputs.version }}-
-            ${{ runner.os }}-buildx-
+          platforms: linux/amd64,linux/arm64
 
       - name: Build and load Docker image
         if: steps.check_build.outputs.exists != 'true'
@@ -146,26 +132,24 @@ jobs:
             PSQL_SUPPORT_VERSION=${{ matrix.pg_version }}
             PGRX_VERSION=${{ steps.extension-versions.outputs.pgrx_version}}
           tags: pgrx:${{ matrix.pg_version }}-${{ steps.extension-versions.outputs.pgrx_version }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           load: true
           outputs: type=docker
-
-      - name: Move cache
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
 
       - name: Package extension
         if: steps.check_build.outputs.exists != 'true'
         run: |
           cd "build/${{ matrix.extension }}"
-          VERSION=$(grep -m1 '^version = "[^"]*"' Cargo.toml | grep -o '"[^"]*"' | tr -d '"')
           mkdir -p artifacts
-          tar -czf artifacts/${{ matrix.extension }}-pg${{ matrix.pg_version }}-${{steps.extension-versions.outputs.extension_version}}.tar.gz \
-            -C target/release/${{ matrix.extension }}-pg${{ matrix.pg_version }}/.pgrx/${{ matrix.pg_version }}/pgrx-install/ .
-      
-      
+          # Per amd64
+          tar -czf artifacts/${{ matrix.extension }}-pg${{ matrix.pg_version }}-${VERSION}-amd64.tar.gz \
+            -C target/x86_64-unknown-linux-gnu/release/${{ matrix.extension }}-pg${{ matrix.pg_version }}/.pgrx/${{ matrix.pg_version }}/pgrx-install/ .
+          
+          # Per arm64
+          tar -czf artifacts/${{ matrix.extension }}-pg${{ matrix.pg_version }}-${VERSION}-arm64.tar.gz \
+            -C target/aarch64-unknown-linux-gnu/release/${{ matrix.extension }}-pg${{ matrix.pg_version }}/.pgrx/${{ matrix.pg_version }}/pgrx-install/ .
 
       - name: Upload to B2
         if: steps.check_build.outputs.exists != 'true'
