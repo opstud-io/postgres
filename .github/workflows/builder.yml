@@ -47,18 +47,15 @@ jobs:
             
             # Verifica se esiste già nella cache
             if [ -d "$cache_path" ]; then
-            echo "Using cached repository for $ext" >&2
-            # Aggiorna il repository esistente
-            (cd "$cache_path" && git fetch --depth 1 && git reset --hard HEAD)
+              echo "Using cached repository for $ext" >&2
+              (cd "$cache_path" && git fetch --depth 1 >/dev/null 2>&1 && git reset --hard HEAD >/dev/null 2>&1)
             else
-            echo "Cloning new repository for $ext" >&2
-            # Ottieni info repository
-            local repo_url=$(yq e ".extensions.$ext.repository" extensions.yml)
-            local branch=$(yq e ".extensions.$ext.branch" extensions.yml)
+              echo "Cloning new repository for $ext" >&2
+              local repo_url=$(yq e ".extensions.$ext.repository" extensions.yml)
+              local branch=$(yq e ".extensions.$ext.branch" extensions.yml)
             
-            # Clona repository nella cache
-            mkdir -p "$CACHE_DIR"
-            git clone --depth 1 -b "$branch" "$repo_url" "$cache_path"
+              mkdir -p "$CACHE_DIR"
+              git clone --depth 1 -b "$branch" "$repo_url" "$cache_path" >/dev/null 2>&1
             fi
             
             # Estrai versione PGRX
