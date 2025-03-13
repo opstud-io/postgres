@@ -43,9 +43,9 @@ jobs:
             matrix=$(yq eval -o=json \
               '.extensions | to_entries | map({"extension": .key, "pg_version": .value.versions[]})' \
               extensions.yml)
-            matrix="{\"include\": $matrix}"
+            matrix=$(jq -n --argjson arr "$matrix" '{"include": $arr}')
           fi
-          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+          echo "matrix=$(echo $matrix | jq -c .)" >> $GITHUB_OUTPUT
 
   build:
     needs: setup
