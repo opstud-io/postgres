@@ -64,7 +64,8 @@ jobs:
             curl \
             git \
             jq \
-            wget
+            wget \
+            python3-pip
 
       - name: Install yq
         run: |
@@ -85,24 +86,120 @@ jobs:
           docker buildx version
           docker buildx ls
 
+      - name: Check Existing Build
+        id: check_build
+        run: |
+          ARTIFACT_NAME="${{ matrix.extension }}-pg${{ matrix.pg_version }}.tar.gz"
+          # Verifica se l'artefatto esiste già su B2
+          if b2 download-file-by-name your-bucket-name "$ARTIFACT_NAME" /dev/null 2>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
+      - name: Install B2 CLI
+        if: steps.check_build.outputs.exists != 'true'
+        run: |
+          pip install b2
+
       - name: Build Extension
+        if: steps.check_build.outputs.exists != 'true'
         run: |
           chmod +x ./scripts/build-extension.sh
           ./scripts/build-extension.sh ${{ matrix.extension }} ${{ matrix.pg_version }}
 
-      - name: Upload Artifact
+      - name: Upload to B2
+        if: steps.check_build.outputs.exists != 'true'
+        env:
+          B2_APPLICATION_KEY_ID: ${{ secrets.B2_APPLICATION_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+        run: |
+          b2 authorize-account "$B2_APPLICATION_KEY_ID" "$B2_APPLICATION_KEY"
+          cd artifacts
+          for file in *.tar.gz; do
+            b2 upload-file your-bucket-name "$file" "$file"
+          done
+
+      - name: Generate Download URL
+        run: |
+          ARTIFACT_NAME="${{ matrix.extension }}-pg${{ matrix.pg_version }}.tar.gz"
+          echo "L'estensione può essere scaricata da:"
+          echo "https://f002.backblazeb2.com/file/your-bucket-name/$ARTIFACT_NAME"
+
+  list-builds:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install B2 CLI
+        run: |
+          pip install b2
+
+      - name: List All Builds
+        env:
+          B2_APPLICATION_KEY_ID: ${{ secrets.B2_APPLICATION_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+        run: |
+          b2 authorize-account "$B2_APPLICATION_KEY_ID" "$B2_APPLICATION_KEY"
+          
+          echo "## Estensioni PostgreSQL Disponibili" > build_list.md
+          echo "" >> build_list.md
+          echo "| Estensione | Versione PG | Link Download |" >> build_list.md
+          echo "|------------|-------------|---------------|" >> build_list.md
+          
+          b2 ls your-bucket-name | while read -r line; do
+            if [[ $line == *.tar.gz ]]; then
+              filename=$(echo "$line" | awk '{print $NF}')
+              extension=$(echo "$filename" | cut -d'-' -f1)
+              pg_version=$(echo "$filename" | grep -o 'pg[0-9]*' | sed 's/pg//')
+              download_url="https://f002.backblazeb2.com/file/your-bucket-name/$filename"
+              echo "| $extension | $pg_version | [Download]($download_url) |" >> build_list.md
+            fi
+          done
+          
+          echo "### Lista delle build disponibili:"
+          cat build_list.md
+
+      - name: Generate JSON Index
+        run: |
+          echo '{"builds": [' > builds.json
+          b2 ls your-bucket-name | while read -r line; do
+            if [[ $line == *.tar.gz ]]; then
+              filename=$(echo "$line" | awk '{print $NF}')
+              extension=$(echo "$filename" | cut -d'-' -f1)
+              pg_version=$(echo "$filename" | grep -o 'pg[0-9]*' | sed 's/pg//')
+              download_url="https://f002.backblazeb2.com/file/your-bucket-name/$filename"
+              echo "{\"extension\": \"$extension\", \"pg_version\": \"$pg_version\", \"url\": \"$download_url\"}," >> builds.json
+            fi
+          done
+          sed -i '$ s/,$//' builds.json
+          echo ']}' >> builds.json
+          
+          b2 upload-file your-bucket-name builds.json builds.json
+
+      - name: Upload Build List
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.extension }}-pg${{ matrix.pg_version }}
-          path: artifacts/*.tar.gz
-          retention-days: 5
+          name: build-list
+          path: build_list.md
+          retention-days: 1
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        if: github.event_name == 'workflow_dispatch'
-        with:
-          tag_name: ${{ matrix.extension }}-pg${{ matrix.pg_version }}-${{ github.sha }}
-          files: artifacts/*.tar.gz
-          generate_release_notes: true
+      - name: Update Build List in Repository
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          
+          if [ -f "BUILDS.md" ]; then
+            rm BUILDS.md
+          fi
+          
+          mv build_list.md BUILDS.md
+          
+          git add BUILDS.md
+          git commit -m "Aggiorna lista delle build disponibili [skip ci]"
+          git push

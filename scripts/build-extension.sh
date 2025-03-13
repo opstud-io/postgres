@@ -35,7 +35,7 @@ if [ -z "$PGRX_VERSION" ]; then
     exit 1
 fi
 
-DOCKER_TAG="local/pgrx:${PG_VERSION}-${PGRX_VERSION}"
+DOCKER_TAG="pgrx:${PG_VERSION}-${PGRX_VERSION}"
 
 # Build Docker image with correct PGRX version
 echo "Building Docker image with PGRX version ${PGRX_VERSION}..."
