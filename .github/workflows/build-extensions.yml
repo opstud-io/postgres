@@ -72,26 +72,35 @@ jobs:
           wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
           chmod +x /usr/local/bin/yq
 
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
-        with:
-          install: true
-          driver-opts: |
-            image=moby/buildkit:latest
-          buildkitd-flags: --debug
-
-      - name: Docker info
+      - name: Clone repository and extract PGRX version
+        id: extension-versions
         run: |
-          docker info
-          docker buildx version
-          docker buildx ls
+          WORK_DIR="build/${{ matrix.extension }}"
+          mkdir -p "$WORK_DIR"
+
+          # Get repository info from extensions.yml
+          REPO_URL=$(yq e ".extensions.${{ matrix.extension }}.repository" extensions.yml)
+          BRANCH=$(yq e ".extensions.${{ matrix.extension }}.branch" extensions.yml)
+
+          # Clone repository
+          git clone --depth 1 -b "$BRANCH" "$REPO_URL" "$WORK_DIR"
+          
+          cd "$WORK_DIR"
+          
+          # Extract PGRX version
+          PGRX_VERSION=$(grep -m1 'pgrx = "[^"]*"' Cargo.toml | grep -o '"[^"]*"' | tr -d '"')
+          echo "pgrx_version=${PGRX_VERSION}" >> $GITHUB_OUTPUT
+          
+          # Extract Extension version
+          EXTENSION_VERSION=$(grep -m1 '^version = "[^"]*"' Cargo.toml | grep -o '"[^"]*"' | tr -d '"')
+          echo "extension_version=${EXTENSION_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Check Existing Build
         id: check_build
         run: |
-          ARTIFACT_NAME="${{ matrix.extension }}-pg${{ matrix.pg_version }}.tar.gz"
+          ARTIFACT_NAME="${{ matrix.extension }}-pg${{ matrix.pg_version }}-${{steps.extension-versions.outputs.extension_version}}.tar.gz"
           # Verifica se l'artefatto esiste già su B2
-          if b2 download-file-by-name your-bucket-name "$ARTIFACT_NAME" /dev/null 2>/dev/null; then
+          if b2 download-file-by-name opstio-pg-extensions "$ARTIFACT_NAME" /dev/null 2>/dev/null; then
             echo "exists=true" >> $GITHUB_OUTPUT
           else
             echo "exists=false" >> $GITHUB_OUTPUT
@@ -103,11 +112,50 @@ jobs:
         run: |
           pip install b2
 
-      - name: Build Extension
+      - name: Set up Docker
+        if: steps.check_build.outputs.exists != 'true'
+        uses: docker/setup-buildx-action@v3
+        with:
+          install: true
+          driver-opts: |
+            image=moby/buildkit:latest
+          buildkitd-flags: --debug
+
+      - name: Cache Docker layers
+        if: steps.check_build.outputs.exists != 'true'
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-pgrx${{ steps.extension-versions.outputs.pgrx_version }}-pg${{ matrix.pg_version }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-pgrx${{ steps.pgrx-version.outputs.version }}-
+            ${{ runner.os }}-buildx-
+
+      - name: Build and load Docker image
+        if: steps.check_build.outputs.exists != 'true'
+        uses: docker/build-push-action@v5
+        id: docker_build
+        with:
+          context: "https://github.com/shencangsheng/pgrx-docker.git#main"
+          build-args: |
+            PSQL_SUPPORT_VERSION=${{ matrix.pg_version }}
+            PGRX_VERSION=${{ steps.extension-versions.outputs.pgrx_version}}
+          tags: pgrx:${{ matrix.pg_version }}-${{ steps.extension-versions.outputs.pgrx_version }}
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          load: true
+          outputs: type=docker
+
+      - name: Package extension
         if: steps.check_build.outputs.exists != 'true'
         run: |
-          chmod +x ./scripts/build-extension.sh
-          ./scripts/build-extension.sh ${{ matrix.extension }} ${{ matrix.pg_version }}
+          cd "build/${{ matrix.extension }}"
+          VERSION=$(grep -m1 '^version = "[^"]*"' Cargo.toml | grep -o '"[^"]*"' | tr -d '"')
+          mkdir -p artifacts
+          tar -czf artifacts/${{ matrix.extension }}-pg${{ matrix.pg_version }}-${{steps.extension-versions.outputs.extension_version}}.tar.gz \
+            -C target/release/${{ matrix.extension }}-pg${{ matrix.pg_version }}/.pgrx/${{ matrix.pg_version }}/pgrx-install/ .
+      
+      
 
       - name: Upload to B2
         if: steps.check_build.outputs.exists != 'true'
@@ -118,14 +166,14 @@ jobs:
           b2 authorize-account "$B2_APPLICATION_KEY_ID" "$B2_APPLICATION_KEY"
           cd artifacts
           for file in *.tar.gz; do
-            b2 upload-file your-bucket-name "$file" "$file"
+            b2 upload-file opstio-pg-extensions "$file" "$file"
           done
 
       - name: Generate Download URL
         run: |
-          ARTIFACT_NAME="${{ matrix.extension }}-pg${{ matrix.pg_version }}.tar.gz"
+          ARTIFACT_NAME="${{ matrix.extension }}-pg${{ matrix.pg_version }}-${{steps.extension-versions.outputs.extension_version}}.tar.gz"
           echo "L'estensione può essere scaricata da:"
-          echo "https://f002.backblazeb2.com/file/your-bucket-name/$ARTIFACT_NAME"
+          echo "https://f002.backblazeb2.com/file/opstio-pg-extensions/$ARTIFACT_NAME"
 
   list-builds:
     needs: build
@@ -149,12 +197,12 @@ jobs:
           echo "| Estensione | Versione PG | Link Download |" >> build_list.md
           echo "|------------|-------------|---------------|" >> build_list.md
           
-          b2 ls your-bucket-name | while read -r line; do
+          b2 ls opstio-pg-extensions | while read -r line; do
             if [[ $line == *.tar.gz ]]; then
               filename=$(echo "$line" | awk '{print $NF}')
               extension=$(echo "$filename" | cut -d'-' -f1)
               pg_version=$(echo "$filename" | grep -o 'pg[0-9]*' | sed 's/pg//')
-              download_url="https://f002.backblazeb2.com/file/your-bucket-name/$filename"
+              download_url="https://f002.backblazeb2.com/file/opstio-pg-extensions/$filename"
               echo "| $extension | $pg_version | [Download]($download_url) |" >> build_list.md
             fi
           done
@@ -165,19 +213,19 @@ jobs:
       - name: Generate JSON Index
         run: |
           echo '{"builds": [' > builds.json
-          b2 ls your-bucket-name | while read -r line; do
+          b2 ls opstio-pg-extensions | while read -r line; do
             if [[ $line == *.tar.gz ]]; then
               filename=$(echo "$line" | awk '{print $NF}')
               extension=$(echo "$filename" | cut -d'-' -f1)
               pg_version=$(echo "$filename" | grep -o 'pg[0-9]*' | sed 's/pg//')
-              download_url="https://f002.backblazeb2.com/file/your-bucket-name/$filename"
+              download_url="https://f002.backblazeb2.com/file/opstio-pg-extensions/$filename"
               echo "{\"extension\": \"$extension\", \"pg_version\": \"$pg_version\", \"url\": \"$download_url\"}," >> builds.json
             fi
           done
           sed -i '$ s/,$//' builds.json
           echo ']}' >> builds.json
           
-          b2 upload-file your-bucket-name builds.json builds.json
+          b2 upload-file opstio-pg-extensions builds.json builds.json
 
       - name: Upload Build List
         uses: actions/upload-artifact@v4
