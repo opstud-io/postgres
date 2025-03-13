@@ -33,16 +33,17 @@ jobs:
           if [ "${{ github.event.inputs.extension }}" != "" ]; then
             VERSIONS="${{ github.event.inputs.pg_version }}"
             if [ -z "$VERSIONS" ]; then
-              VERSIONS=$(yq e ".extensions.${{ github.event.inputs.extension }}.versions[]" extensions.yml | tr '\n' ' ')
+              VERSIONS=$(yq eval ".extensions.${{ github.event.inputs.extension }}.versions[]" extensions.yml | tr '\n' ' ')
             fi
             matrix=$(jq -n \
               --arg ext "${{ github.event.inputs.extension }}" \
               --arg vers "$VERSIONS" \
               '{include: [{"extension": $ext, "pg_version": ($vers | split(" ")[0])}]}')
           else
-            matrix=$(yq e -o=json \
-              '.extensions | to_entries | {include: map(.value.versions[] as $v | {"extension": .key, "pg_version": $v})}' \
+            matrix=$(yq eval -o=json \
+              '.extensions | to_entries | map({"extension": .key, "pg_version": .value.versions[]})' \
               extensions.yml)
+            matrix="{\"include\": $matrix}"
           fi
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
 
@@ -76,7 +77,7 @@ jobs:
       - name: Build Extension
         run: |
           chmod +x ./scripts/build-extension.sh
-          ./scripts/build-extension.sh ${{ matrix.extension }} ${{ matrix.pg_version }}
+          ./scripts/build-extension.sh EXTENSION=${{ matrix.extension }} PG_VERSION=${{ matrix.pg_version }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
