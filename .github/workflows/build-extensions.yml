@@ -88,7 +88,7 @@ jobs:
       - name: Build Extension
         run: |
           chmod +x ./scripts/build-extension.sh
-          ./scripts/build-extension.sh EXTENSION=${{ matrix.extension }} PG_VERSION=${{ matrix.pg_version }}
+          ./scripts/build-extension.sh ${{ matrix.extension }} ${{ matrix.pg_version }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
