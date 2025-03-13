@@ -2,25 +2,23 @@ name: 'Install cached packages'
 runs:
   using: "composite"
   steps:
-    - name: Create cache directories
+    - name: Create local apt cache
       shell: bash
       run: |
-        sudo mkdir -p /opt/cache/apt-lists
+        sudo mkdir -p /opt/cache/apt-cache
         sudo chown -R runner:runner /opt/cache
+        sudo rm -rf /opt/cache/apt-cache/partial || true
 
     - name: Cache apt packages
       id: cache-apt
       uses: actions/cache@v4
       with:
-        path: /opt/cache/apt-lists
+        path: /opt/cache/apt-cache
         key: ${{ runner.os }}-apt-1.0
 
-    - name: Install git
+    - name: Install apts
       shell: bash
       run: |
-        if [ -d "/opt/cache/apt-lists" ] && [ -n "$(ls -A /opt/cache/apt-lists)" ]; then
-          sudo cp -r /opt/cache/apt-lists/* /var/lib/apt/lists/
-        fi
         sudo apt-get update
         sudo apt-get install -y build-essential \
             curl \
@@ -28,19 +26,25 @@ runs:
             jq \
             wget \
             python3-pip
-        sudo cp -r /var/lib/apt/lists/* /opt/cache/apt-lists/
+        sudo cp -r /var/lib/apt/lists/* /opt/cache/apt-cache/ || true
+        sudo rm -rf /opt/cache/apt-cache/partial || true
+        sudo rm -f /opt/cache/apt-cache/lock || true
+
+    - name: Create yq cache directory
+      shell: bash
+      run: |
+        mkdir -p /opt/cache/yq-bin
 
     - name: Cache yq binary
       id: cache-yq
       uses: actions/cache@v4
       with:
-        path: /opt/cache/yq
-        key: ${{ runner.os }}-yq-latest-1.0
+        path: /opt/cache/yq-bin
+        key: ${{ runner.os }}-yq-latest-1.1
 
     - name: Install yq
       shell: bash
       run: |
-        sudo mkdir -p /opt/cache/yq
-        sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /opt/cache/yq/yq
-        sudo chmod +x /opt/cache/yq/yq
-        sudo cp /opt/cache/yq/yq /usr/local/bin/yq
+        wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /opt/cache/yq-bin/yq
+        chmod +x /opt/cache/yq-bin/yq
+        sudo cp /opt/cache/yq-bin/yq /usr/local/bin/yq
