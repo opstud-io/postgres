@@ -1,0 +1,41 @@
+name: Build Extensions
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    inputs:
+      extension:
+        description: 'Specific extension to build (leave blank for all)'
+        required: false
+      pg_version:
+        description: 'PostgreSQL Version'
+        required: false
+        default: '16'
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/install-tools
+
+      - id: set-matrix
+        run: |
+          if [ "${{ github.event.inputs.extension }}" != "" ]; then
+            VERSIONS="${{ github.event.inputs.pg_version }}"
+            if [ -z "$VERSIONS" ]; then
+              VERSIONS=$(yq eval ".extensions.${{ github.event.inputs.extension }}.versions[]" extensions.yml | tr '\n' ' ')
+            fi
+            matrix=$(jq -n \
+              --arg ext "${{ github.event.inputs.extension }}" \
+              --arg vers "$VERSIONS" \
+              '{include: [{"extension": $ext, "pg_version": ($vers | split(" ")[0])}]}')
+          else
+            matrix=$(yq eval -o=json \
+              '.extensions | to_entries | map({"extension": .key, "pg_version": .value.versions[]})' \
+              extensions.yml)
+            matrix=$(jq -n --argjson arr "$matrix" '{"include": $arr}')
+          fi
+          echo "matrix=$(echo $matrix | jq -c .)" >> $GITHUB_OUTPUT
