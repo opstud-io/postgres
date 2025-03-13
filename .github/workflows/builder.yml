@@ -100,7 +100,7 @@ jobs:
 
   init-build-images:
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      matrix: ${{ steps.init-build-images.outputs.matrix }}
     needs: setup
     runs-on: ubuntu-latest
     steps:
