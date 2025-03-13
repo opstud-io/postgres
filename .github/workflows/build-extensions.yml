@@ -121,6 +121,10 @@ jobs:
             image=moby/buildkit:latest
           buildkitd-flags: --debug
 
+      - name: Set up cache directory
+        run: |
+          mkdir -p /tmp/.buildx-cache
+
       - name: Cache Docker layers
         if: steps.check_build.outputs.exists != 'true'
         uses: actions/cache@v4
@@ -145,6 +149,11 @@ jobs:
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
           load: true
           outputs: type=docker
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
 
       - name: Package extension
         if: steps.check_build.outputs.exists != 'true'
