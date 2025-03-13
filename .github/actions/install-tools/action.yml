@@ -45,6 +45,13 @@ runs:
     - name: Install yq
       shell: bash
       run: |
-        wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /opt/cache/yq-bin/yq
-        chmod +x /opt/cache/yq-bin/yq
+        # Check if yq binary exists in cache
+        if [ ! -f "/opt/cache/yq-bin/yq" ]; then
+          echo "yq not found in cache, downloading..."
+          wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /opt/cache/yq-bin/yq
+          chmod +x /opt/cache/yq-bin/yq
+        else
+          echo "Using cached yq binary"
+        fi
+        # Always copy to system path to ensure it's available
         sudo cp /opt/cache/yq-bin/yq /usr/local/bin/yq

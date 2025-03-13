@@ -100,6 +100,7 @@ jobs:
           fi
           
           echo "matrix=$(echo $matrix | jq -c .)" >> $GITHUB_OUTPUT
+
   init-build-images:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -113,21 +114,41 @@ jobs:
       - name: Generate unique build matrix
         id: unique-builds
         run: |
-          # Estrae la matrice dal job precedente
+          echo "Input matrix from setup job:"
+          echo '${{ needs.setup.outputs.matrix }}'
+    
           matrix='${{ needs.setup.outputs.matrix }}'
-
-          # Crea array di combinazioni uniche pg_version:pgrx_version
+          
+          if [ -z "$matrix" ]; then
+            echo "Error: Input matrix is empty!"
+            exit 1
+          fi
+               
+          echo "Processing matrix..."
+          echo "$matrix" | jq -r '.include[] | "\(.pg_version):\(.pgrx_version)"'
+          
           unique_combinations=$(echo "$matrix" | \
             jq -r '.include[] | "\(.pg_version):\(.pgrx_version)"' | \
             sort -u)
-
-          # Crea nuova matrice per le build
+               
+          echo "Unique combinations found:"
+          echo "$unique_combinations"
+          
           build_matrix=$(echo "$unique_combinations" | \
             jq -R -s -c 'split("\n")[:-1] | map(split(":")) | 
             map({"pg_version": .[0], "pgrx_version": .[1]}) | 
             {"include": .}')
+          
+          echo "Final build matrix:"
+          echo "$build_matrix"
+          
+          if echo "$build_matrix" | jq empty; then
+            echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
+          else
+            echo "Error: Invalid JSON matrix generated"
+            exit 1
+          fi
 
-          echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
 
   build-pgrx:
     needs: init-build-images
@@ -135,6 +156,11 @@ jobs:
     strategy:
       matrix: ${{ fromJson(needs.init-build-images.outputs.matrix) }}
     steps:
+      - name: Verify matrix
+        run: |
+          echo "Matrix content:"
+          echo '${{ needs.init-build-images.outputs.matrix }}'
+
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/install-tools
