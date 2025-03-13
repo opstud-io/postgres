@@ -1,4 +1,4 @@
-name: Build Extensions
+name: Extensions Builder
 on:
   schedule:
     - cron: '0 0 * * *'
@@ -21,21 +21,122 @@ jobs:
 
       - uses: ./.github/actions/install-tools
 
+      - id: setup-cache
+        run: |
+          echo "date=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
+          echo "cache-dir=.repo-cache" >> $GITHUB_OUTPUT
+
+      - name: Cache Repository Info
+        uses: actions/cache@v4
+        id: repo-cache
+        with:
+          path: ${{ steps.setup-cache.outputs.cache-dir }}
+          key: repo-cache-${{ steps.setup-cache.outputs.date }}
+          restore-keys: |
+            repo-cache-
+
+
       - id: set-matrix
         run: |
+          CACHE_DIR="${{ steps.setup-cache.outputs.cache-dir }}"
+    
+          get_pgrx_version() {
+            local ext=$1
+            local cache_key="$ext-repo"
+            local cache_path="$CACHE_DIR/$cache_key"
+            
+            # Verifica se esiste già nella cache
+            if [ -d "$cache_path" ]; then
+            echo "Using cached repository for $ext" >&2
+            # Aggiorna il repository esistente
+            (cd "$cache_path" && git fetch --depth 1 && git reset --hard HEAD)
+            else
+            echo "Cloning new repository for $ext" >&2
+            # Ottieni info repository
+            local repo_url=$(yq e ".extensions.$ext.repository" extensions.yml)
+            local branch=$(yq e ".extensions.$ext.branch" extensions.yml)
+            
+            # Clona repository nella cache
+            mkdir -p "$CACHE_DIR"
+            git clone --depth 1 -b "$branch" "$repo_url" "$cache_path"
+            fi
+            
+            # Estrai versione PGRX
+            local pgrx_version=$(grep -m1 'pgrx = "[^"]*"' "$cache_path/Cargo.toml" | grep -o '"[^"]*"' | tr -d '"')
+            # Estrai versione estensione
+            local ext_version=$(grep -m1 '^version = "[^"]*"' "$cache_path/Cargo.toml" | grep -o '"[^"]*"' | tr -d '"')
+            
+            # Ritorna entrambe le versioni
+            echo "$pgrx_version|$ext_version"
+          }
+      
           if [ "${{ github.event.inputs.extension }}" != "" ]; then
             VERSIONS="${{ github.event.inputs.pg_version }}"
             if [ -z "$VERSIONS" ]; then
               VERSIONS=$(yq eval ".extensions.${{ github.event.inputs.extension }}.versions[]" extensions.yml | tr '\n' ' ')
             fi
+          
+            IFS='|' read -r PGRX_VERSION EXT_VERSION <<< "$(get_pgrx_version "${{ github.event.inputs.extension }}")"
+          
             matrix=$(jq -n \
               --arg ext "${{ github.event.inputs.extension }}" \
               --arg vers "$VERSIONS" \
-              '{include: [{"extension": $ext, "pg_version": ($vers | split(" ")[0])}]}')
+              --arg pgrx "$PGRX_VERSION" \
+              --arg ext_ver "$EXT_VERSION" \
+              '{include: [{"extension": $ext, "pg_version": ($vers | split(" ")[0]), "pgrx_version": $pgrx, "extension_version": $ext_ver}]}')
           else
-            matrix=$(yq eval -o=json \
-              '.extensions | to_entries | map({"extension": .key, "pg_version": .value.versions[]})' \
-              extensions.yml)
-            matrix=$(jq -n --argjson arr "$matrix" '{"include": $arr}')
+            matrix_items=()
+          
+            while IFS= read -r ext; do
+              IFS='|' read -r PGRX_VERSION EXT_VERSION <<< "$(get_pgrx_version "$ext")"
+              versions=$(yq eval ".extensions.$ext.versions[]" extensions.yml)
+          
+              while IFS= read -r pg_version; do
+                matrix_items+=("{\"extension\": \"$ext\", \"pg_version\": \"$pg_version\", \"pgrx_version\": \"$PGRX_VERSION\", \"extension_version\": \"$EXT_VERSION\"}")
+              done <<< "$versions"
+            done < <(yq eval '.extensions | keys[]' extensions.yml)
+          
+            matrix=$(printf '%s\n' "${matrix_items[@]}" | jq -s '{include: .}')
           fi
+          
           echo "matrix=$(echo $matrix | jq -c .)" >> $GITHUB_OUTPUT
+  init-build-images:
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/install-tools
+
+      - name: Generate unique build matrix
+        id: unique-builds
+        run: |
+          # Estrae la matrice dal job precedente
+          matrix='${{ needs.setup.outputs.matrix }}'
+
+          # Crea array di combinazioni uniche pg_version:pgrx_version
+          unique_combinations=$(echo "$matrix" | \
+            jq -r '.include[] | "\(.pg_version):\(.pgrx_version)"' | \
+            sort -u)
+
+          # Crea nuova matrice per le build
+          build_matrix=$(echo "$unique_combinations" | \
+            jq -R -s -c 'split("\n")[:-1] | map(split(":")) | 
+            map({"pg_version": .[0], "pgrx_version": .[1]}) | 
+            {"include": .}')
+
+          echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
+
+  build-pgrx:
+    needs: init-build-images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.init-build-images.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/install-tools
+
+
