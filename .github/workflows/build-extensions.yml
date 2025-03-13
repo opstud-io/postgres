@@ -122,6 +122,13 @@ jobs:
           buildkitd-flags: --debug
           platforms: linux/amd64,linux/arm64
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and load Docker image
         if: steps.check_build.outputs.exists != 'true'
         uses: docker/build-push-action@v5
@@ -131,12 +138,18 @@ jobs:
           build-args: |
             PSQL_SUPPORT_VERSION=${{ matrix.pg_version }}
             PGRX_VERSION=${{ steps.extension-versions.outputs.pgrx_version}}
-          tags: pgrx:${{ matrix.pg_version }}-${{ steps.extension-versions.outputs.pgrx_version }}
+          tags: ghcr.io/${{ github.repository_owner }}/pgrx:${{ matrix.pg_version }}-${{ steps.extension-versions.outputs.pgrx_version }}
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
           load: true
           outputs: type=docker
+
+      - name: Pull images for local use
+        run: |
+          docker pull ghcr.io/${{ github.repository_owner }}/pgrx:${{ matrix.pg_version }}-${{ steps.extension-versions.outputs.pgrx_version }}
+          docker tag ghcr.io/${{ github.repository_owner }}/pgrx:${{ matrix.pg_version }}-${{ steps.extension-versions.outputs.pgrx_version }} \
+            pgrx:${{ matrix.pg_version }}-${{ steps.extension-versions.outputs.pgrx_version }}
 
       - name: Package extension
         if: steps.check_build.outputs.exists != 'true'
