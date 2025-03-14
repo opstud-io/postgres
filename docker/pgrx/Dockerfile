@@ -10,9 +10,22 @@ ENV PSQL_VERSION=13
 LABEL maintainer="Walter Franchetti <w@lter.it>"
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libpq-dev libclang-dev sudo && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends \
+    libpq-dev \
+    libclang-dev \
+    sudo \
+    bison \
+    flex \
+    make \
+    pkg-config \
+    libssl-dev \
+    libcurl4-openssl-dev \
+    libelf-dev \
+    libdw-dev \
+    cmake \
+    zlib1g-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g 1000 pgrx && \
     useradd -m -u 1000 -g pgrx -s /bin/bash pgrx
