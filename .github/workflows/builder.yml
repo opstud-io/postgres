@@ -58,9 +58,16 @@ jobs:
             fi
             
             # Estrai versione PGRX
-            local pgrx_version=$(grep -m1 'pgrx = "[^"]*"' "$cache_path/Cargo.toml" | grep -o '"[^"]*"' | tr -d '"')
+            local pgrx_version=$(
+              awk -F'"' '/^pgrx = "[0-9]/ {print $2; exit}' "$cache_path/Cargo.toml"
+            )
+            pgrx_version=${pgrx_version:-"0.13.1"}          
+          
             # Estrai versione estensione
-            local ext_version=$(grep -m1 '^version = "[^"]*"' "$cache_path/Cargo.toml" | grep -o '"[^"]*"' | tr -d '"')
+            local ext_version=$(
+              awk -F'"' '/^version = / {print $2; exit}' "$cache_path/Cargo.toml"
+            )
+            
             
             # Ritorna entrambe le versioni
             echo "$pgrx_version|$ext_version"

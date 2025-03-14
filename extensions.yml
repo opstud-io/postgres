@@ -13,3 +13,10 @@ extensions:
       - "15"
       - "16"
       - "17"
+  wrappers:
+    repository: "https://github.com/supabase/wrappers.git"
+    branch: "main"
+    versions:
+      - "15"
+      - "16"
+      - "17"
