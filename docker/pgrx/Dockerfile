@@ -10,7 +10,7 @@ ENV PSQL_VERSION=13
 LABEL maintainer="Walter Franchetti <w@lter.it>"
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+    apt-get install -y --no-install-recommends --no-install-suggests \
     build-essential \
     libreadline-dev \
     zlib1g-dev \
