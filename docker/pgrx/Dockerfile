@@ -5,12 +5,23 @@ FROM rust:${RUST_TAG}
 ARG PSQL_SUPPORT_VERSION
 ARG PGRX_VERSION=0.11.4
 
-ENV PSQL_VERSION=13
+ENV PSQL_VERSION=${PSQL_SUPPORT_VERSION:-15}
 
 LABEL maintainer="Walter Franchetti <w@lter.it>"
 
+RUN apt-get update && apt-get install -y \
+    curl \
+    gnupg2 \
+    lsb-release \
+    && curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor | tee /usr/share/keyrings/pgdg.gpg >/dev/null \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list
+
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends --no-install-suggests \
+    postgresql-${PSQL_VERSION} \
+    postgresql-contrib-${PSQL_VERSION} \
+    postgresql-server-dev-${PSQL_VERSION} \
     build-essential \
     libreadline-dev \
     zlib1g-dev \
@@ -52,7 +63,7 @@ ENV USER=pgrx
 
 RUN cargo install cargo-pgrx --version ${PGRX_VERSION} --locked
 
-RUN cargo pgrx init ${PSQL_SUPPORT_VERSION:+--pg$PSQL_SUPPORT_VERSION=download}
+RUN cargo pgrx init --pg${PSQL_VERSION} /usr/lib/postgresql/${PSQL_VERSION}/bin/pg_config
 
 WORKDIR /usr/src/app
 

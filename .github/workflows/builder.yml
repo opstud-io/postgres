@@ -186,6 +186,4 @@ jobs:
             --output "type=image,push=true" \
             --tag quay.io/opsio/pgrx:${{ matrix.pgrx_version }}-${{ matrix.pg_version }} \
             --file ./docker/pgrx/Dockerfile ./docker/pgrx \
-            --cache-from=type=registry,ref=quay.io/opsio/pgrx:cache \
-            --cache-to=type=registry,ref=quay.io/opsio/pgrx:cache,mode=max \
             --progress=plain
