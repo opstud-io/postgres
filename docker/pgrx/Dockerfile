@@ -11,27 +11,24 @@ LABEL maintainer="Walter Franchetti <w@lter.it>"
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    libpq-dev \
-    libclang-dev \
-    sudo \
-    bison \
-    flex \
-    make \
-    pkg-config \
-    libssl-dev \
-    libcurl4-openssl-dev \
-    libelf-dev \
-    libdw-dev \
-    cmake \
-    zlib1g-dev \
     build-essential \
+    libreadline-dev \
+    zlib1g-dev \
+    flex \
+    bison \
+    libxml2-dev \
+    libxslt-dev \
+    libssl-dev \
+    libxml2-utils \
+    xsltproc \
+    ccache \
+    pkg-config \
+    libclang-dev \
     clang \
-    llvm \
-    git \
-    gcc \
-    libc6-dev \
+    sudo \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
 
 
 ENV CC=clang
