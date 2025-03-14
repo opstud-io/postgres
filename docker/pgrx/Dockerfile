@@ -1,4 +1,4 @@
-ARG RUST_TAG=1.83.0-bullseye
+ARG RUST_TAG=1.85.0-bullseye
 
 FROM rust:${RUST_TAG}
 
@@ -27,9 +27,12 @@ RUN apt-get update && \
     build-essential \
     clang \
     llvm \
-    gcc-multilib \
+    git \
+    gcc \
+    libc6-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
 
 ENV CC=clang
 ENV CXX=clang++
