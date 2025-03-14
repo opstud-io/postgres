@@ -111,9 +111,6 @@ jobs:
       - name: Generate unique build matrix
         id: unique-builds
         run: |
-          echo "Input matrix from setup job:"
-          echo '${{ needs.setup.outputs.matrix }}'
-    
           matrix='${{ needs.setup.outputs.matrix }}'
           
           if [ -z "$matrix" ]; then
@@ -127,17 +124,12 @@ jobs:
           unique_combinations=$(echo "$matrix" | \
             jq -r '.include[] | "\(.pg_version):\(.pgrx_version)"' | \
             sort -u)
-               
-          echo "Unique combinations found:"
-          echo "$unique_combinations"
+
           
           build_matrix=$(echo "$unique_combinations" | \
             jq -R -s -c 'split("\n")[:-1] | map(split(":")) | 
             map({"pg_version": .[0], "pgrx_version": .[1]}) | 
             {"include": .}')
-          
-          echo "Final build matrix:"
-          echo "$build_matrix"
           
           if echo "$build_matrix" | jq empty; then
             echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
@@ -152,14 +144,46 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJson(needs.init-build-images.outputs.matrix) }}
+      fail-fast: false
     steps:
-      - name: Verify matrix
-        run: |
-          echo "Matrix content:"
-          echo '${{ needs.init-build-images.outputs.matrix }}'
 
       - uses: actions/checkout@v4
 
-      - uses: ./.github/actions/install-tools
+      - name: Login to Quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+
+      - name: Check if image exist
+        id: check_image
+        continue-on-error: true
+        run: |
+          TAG="${{ matrix.pgrx_version }}-${{ matrix.pg_version }}"
+          if docker manifest inspect "quay.io/opsio/pgrx:${TAG}" > /dev/null 2>&1; then
+            echo "Image exist"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Build needed"
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.check_image.outputs.exists != 'true'
+        id: buildx
+        uses: crazy-max/ghaction-docker-buildx@v3
+
+      - name: Docker Buildx (${{ matrix.pgrx_version }}-${{ matrix.pg_version }})
+        if: steps.check_image.outputs.exists != 'true'
+        run: |
+          docker buildx build \
+            --build-arg PSQL_SUPPORT_VERSION=${{ matrix.pg_version }} \
+            --build-arg PGRX_VERSION=${{ matrix.pgrx_version }}
+            --platform linux/amd64,linux/arm64 \
+            --output "type=image,push=true" \
+            --tag quay.io/opsio/pgrx:${{ matrix.pgrx_version }}-${{ matrix.pg_version }} \
+            --file ./docker/pgrx/Dockerfile ./docker/pgrx
+
 
 
