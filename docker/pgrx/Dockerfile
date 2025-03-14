@@ -26,13 +26,11 @@ RUN apt-get update && \
     libclang-dev \
     clang \
     sudo \
+    llvm-11-dev \
+    libomp-11-dev \
+    libfl-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-
-
-
-ENV CC=clang
-ENV CXX=clang++
 
 RUN groupadd -g 1000 pgrx && \
     useradd -m -u 1000 -g pgrx -s /bin/bash pgrx
