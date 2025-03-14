@@ -24,8 +24,15 @@ RUN apt-get update && \
     libdw-dev \
     cmake \
     zlib1g-dev \
+    build-essential \
+    clang \
+    llvm \
+    gcc-multilib \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+ENV CC=clang
+ENV CXX=clang++
 
 RUN groupadd -g 1000 pgrx && \
     useradd -m -u 1000 -g pgrx -s /bin/bash pgrx
