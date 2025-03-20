@@ -144,13 +144,18 @@ jobs:
     }}
     strategy:
       matrix:
-        platform:
-          - linux/amd64
-          - linux/arm64
-        pgrx_version: ${{ fromJson(needs.init-build-images.outputs.matrix).include[*].pgrx_version }}
+        include:
+          platform:
+            - linux/amd64
+            - linux/arm64
+          pgrx_version: ${{ fromJson(needs.init-build-images.outputs.matrix).include[*].pgrx_version }}
       max-parallel: 6
       fail-fast: false
     steps:
+      - name: Debug Matrix
+        run: |
+          echo "Platform: ${{ matrix.platform }}"
+          echo "Pgrx Version: ${{ matrix.pgrx_version }}"
 
       - uses: actions/checkout@v4
 
