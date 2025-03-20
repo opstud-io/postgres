@@ -249,7 +249,15 @@ jobs:
       - name: Create Multi-Arch Manifest
         run: |
           # Ottieni le versioni univoche dalla matrice
-          VERSIONS=$(echo '${{ toJson(needs.init-build-images.outputs.matrix) }}' | jq -r '.include[].pgrx_version' | sort -u)
+          matrix='${{ fromJson(needs.init-build-images.outputs.matrix) }}'
+          if [ -z "$matrix" ]; then
+            echo "Error: Input matrix is empty!"
+            exit 1
+          fi
+          
+          echo "Processing matrix..."
+          VERSIONS=$(echo "$matrix" | jq -r '.include[].pgrx_version' | sort -u)
+        
           
           for VERSION in $VERSIONS; do
             ARCH_IMAGES=()
