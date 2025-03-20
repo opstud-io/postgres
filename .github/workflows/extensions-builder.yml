@@ -138,9 +138,7 @@ jobs:
 
   build-pgrx:
     needs: init-build-images
-    runs-on:
-      - ${{ matrix.platform == 'linux/arm64' && 'ubuntu-latest-arm64' || 'ubuntu-latest' }}
-      - ${{ matrix.platform }}
+    runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-latest-arm64' || 'ubuntu-latest' }}
     strategy:
       matrix:
         include:
