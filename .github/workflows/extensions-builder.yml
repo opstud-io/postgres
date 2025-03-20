@@ -83,10 +83,9 @@ jobs:
           
             matrix=$(jq -n \
               --arg ext "${{ github.event.inputs.extension }}" \
-              --arg vers "$VERSIONS" \
               --arg pgrx "$PGRX_VERSION" \
               --arg ext_ver "$EXT_VERSION" \
-              '{include: [{"extension": $ext, "pg_version": ($vers | split(" ")[0]), "pgrx_version": $pgrx, "extension_version": $ext_ver}]}')
+              '{include: [{"extension": $ext, "pgrx_version": $pgrx, "extension_version": $ext_ver}]}')
           else
             matrix_items=()
           
@@ -95,7 +94,7 @@ jobs:
               versions=$(yq eval ".extensions.$ext.versions[]" extensions.yml)
           
               while IFS= read -r pg_version; do
-                matrix_items+=("{\"extension\": \"$ext\", \"pg_version\": \"$pg_version\", \"pgrx_version\": \"$PGRX_VERSION\", \"extension_version\": \"$EXT_VERSION\"}")
+                matrix_items+=("{\"extension\": \"$ext\", \"pgrx_version\": \"$PGRX_VERSION\", \"extension_version\": \"$EXT_VERSION\"}")
               done <<< "$versions"
             done < <(yq eval '.extensions | keys[]' extensions.yml)
           
@@ -128,14 +127,14 @@ jobs:
           echo "$matrix" | jq -r '.include[] | "\(.pg_version):\(.pgrx_version)"'
           
           unique_combinations=$(echo "$matrix" | \
-            jq -r '.include[] | "\(.pg_version):\(.pgrx_version)"' | \
+            jq -r '.include[] | "\(.pgrx_version)"' | \
             sort -u)
-
+          
           
           build_matrix=$(echo "$unique_combinations" | \
-            jq -R -s -c 'split("\n")[:-1] | map(split(":")) | 
-            map({"pg_version": .[0], "pgrx_version": .[1]}) | 
+            jq -R -s -c 'split("\n")[:-1] | map({"pgrx_version": .}) |
             {"include": .}')
+
           
           if echo "$build_matrix" | jq empty; then
             echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
@@ -166,7 +165,7 @@ jobs:
         id: check_image
         continue-on-error: true
         run: |
-          TAG="${{ matrix.pgrx_version }}-${{ matrix.pg_version }}"
+          TAG="${{ matrix.pgrx_version }}"
           if docker manifest inspect "quay.io/opsio/pgrx:${TAG}" > /dev/null 2>&1; then
             echo "Image exist"
             echo "exists=true" >> $GITHUB_OUTPUT
@@ -187,10 +186,9 @@ jobs:
         if: steps.check_image.outputs.exists != 'true'
         run: |
           docker buildx build \
-            --build-arg PSQL_SUPPORT_VERSION=${{ matrix.pg_version }} \
             --build-arg PGRX_VERSION=${{ matrix.pgrx_version }} \
             --platform linux/amd64,linux/arm64 \
             --output "type=image,push=true" \
-            --tag quay.io/opsio/pgrx:${{ matrix.pgrx_version }}-${{ matrix.pg_version }} \
+            --tag quay.io/opsio/pgrx:${{ matrix.pgrx_version }}\
             --file ./docker/pgrx/Dockerfile ./docker/pgrx \
             --progress=plain

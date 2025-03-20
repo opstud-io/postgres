@@ -19,9 +19,6 @@ RUN apt-get update && apt-get install -y \
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends --no-install-suggests \
-    postgresql-${PSQL_VERSION} \
-    postgresql-contrib-${PSQL_VERSION} \
-    postgresql-server-dev-${PSQL_VERSION} \
     build-essential \
     libreadline-dev \
     zlib1g-dev \
@@ -63,7 +60,7 @@ ENV USER=pgrx
 
 RUN cargo install cargo-pgrx --version ${PGRX_VERSION} --locked
 
-RUN cargo pgrx init --pg${PSQL_VERSION} /usr/lib/postgresql/${PSQL_VERSION}/bin/pg_config
+RUN cargo pgrx init
 
 WORKDIR /usr/src/app
 
