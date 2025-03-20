@@ -138,14 +138,17 @@ jobs:
 
   build-pgrx:
     needs: init-build-images
-    runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    runs-on: ${{
+       matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' ||
+       matrix.platform == 'linux/amd64' && 'ubuntu-latest'
+    }}
     strategy:
       matrix:
-        include:
-          - platform: linux/amd64
-          - platform: linux/arm64
+        platform:
+          - linux/amd64
+          - linux/arm64
         pgrx_version: ${{ fromJson(needs.init-build-images.outputs.matrix).include[*].pgrx_version }}
-      max-parallel: 2
+      max-parallel: 6
       fail-fast: false
     steps:
 
