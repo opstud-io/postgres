@@ -122,7 +122,6 @@ jobs:
             jq -r '.include[] | "\(.pgrx_version)"' | \
             sort -u)
           
-          
           build_matrix=$(echo "$matrix" | \
             jq -c '.include | 
             map({
@@ -136,7 +135,6 @@ jobs:
             {
               "include": .
             }')
-          
           
           if echo "$build_matrix" | jq empty; then
             echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
