@@ -11,3 +11,4 @@ extensions:
     type: pgrx
     repository: "https://github.com/supabase/wrappers.git"
     branch: "main"
+    pgrx_version: 0.12.9
