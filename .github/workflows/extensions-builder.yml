@@ -146,13 +146,11 @@ jobs:
   build-pgrx:
     needs: init-build-images
     runs-on: ${{
-               matrix.platform == 'linux/arm64'
-               ? 'ubuntu-24.04-arm'
-      : (matrix.platform == 'linux/amd64'
-               ? 'ubuntu-latest'
-      : 'ubuntu-latest')
-    }}
-    strategy:
+        matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' ||
+        matrix.platform == 'linux/amd64' && 'ubuntu-latest' ||
+        'ubuntu-latest'
+      }}
+  strategy:
       matrix: ${{ fromJson(needs.init-build-images.outputs.matrix) }}
       fail-fast: false
     steps:
