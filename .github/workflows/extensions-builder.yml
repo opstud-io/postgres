@@ -249,7 +249,6 @@ jobs:
       - name: Create Multi-Arch Manifest
         run: |
           matrix='${{ needs.init-build-images.outputs.matrix }}'
-          echo "Original Matrix: $matrix"
           if [ -z "$matrix" ]; then
             echo "Error: Input matrix is empty!"
             exit 1
