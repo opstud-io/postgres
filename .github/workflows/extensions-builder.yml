@@ -150,7 +150,7 @@ jobs:
         matrix.platform == 'linux/amd64' && 'ubuntu-latest' ||
         'ubuntu-latest'
       }}
-  strategy:
+    strategy:
       matrix: ${{ fromJson(needs.init-build-images.outputs.matrix) }}
       fail-fast: false
     steps:
