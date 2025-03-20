@@ -145,7 +145,6 @@ jobs:
             exit 1
           fi
 
-
   build-pgrx:
     needs: init-build-images
     runs-on: ${{
