@@ -122,24 +122,26 @@ jobs:
           echo "Processing matrix..."
           
           unique_combinations=$(echo "$matrix" | \
-            jq -r '.include[] | "\(.pgrx_version)"' | \
-            sort -u)
+            jq -r '.include | map(.pgrx_version) | unique')
+          
           
           build_matrix=$(echo "$matrix" | \
-            jq -c '.include | 
-            map({
-              "pgrx_version": .pgrx_version, 
-              "platform": "linux/amd64"
-            }) + 
-            map({
-              "pgrx_version": .pgrx_version, 
-              "platform": "linux/arm64"
-            }) | 
-            {
-              "include": .
-            }')
+            jq -c '.include |
+            [
+              .[] | {
+                    "pgrx_version": .pgrx_version, 
+                    "platform": "linux/amd64"
+                    },
+                    .[] | {
+                    "pgrx_version": .pgrx_version, 
+                    "platform": "linux/arm64"
+                    }
+                    ] | {
+                    "include": .
+                    }')
           
-          if echo "$build_matrix" | jq empty; then
+          
+            if echo "$build_matrix" | jq empty; then
             echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
           else
             echo "Error: Invalid JSON matrix generated"
