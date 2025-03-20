@@ -3,23 +3,11 @@ extensions:
     type: pgrx
     repository: "https://github.com/supabase/pg_jsonschema.git"
     branch: "master"
-    versions:
-      - "15"
-      - "16"
-      - "17"
   pg_session_jwt:
     type: pgrx
     repository: "https://github.com/neondatabase/pg_session_jwt.git"
     branch: "main"
-    versions:
-      - "15"
-      - "16"
-      - "17"
   wrappers:
     type: pgrx
     repository: "https://github.com/supabase/wrappers.git"
     branch: "main"
-    versions:
-      - "15"
-      - "16"
-      - "17"

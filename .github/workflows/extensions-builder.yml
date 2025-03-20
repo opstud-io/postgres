@@ -74,10 +74,7 @@ jobs:
           }
       
           if [ "${{ github.event.inputs.extension }}" != "" ]; then
-            VERSIONS="${{ github.event.inputs.pg_version }}"
-            if [ -z "$VERSIONS" ]; then
-              VERSIONS=$(yq eval ".extensions.${{ github.event.inputs.extension }}.versions[]" extensions.yml | tr '\n' ' ')
-            fi
+
           
             IFS='|' read -r PGRX_VERSION EXT_VERSION <<< "$(get_pgrx_version "${{ github.event.inputs.extension }}")"
           
@@ -88,17 +85,16 @@ jobs:
               '{include: [{"extension": $ext, "pgrx_version": $pgrx, "extension_version": $ext_ver}]}')
           else
             matrix_items=()
-          
+
             while IFS= read -r ext; do
-              IFS='|' read -r PGRX_VERSION EXT_VERSION <<< "$(get_pgrx_version "$ext")"
-              versions=$(yq eval ".extensions.$ext.versions[]" extensions.yml)
-          
-              while IFS= read -r pg_version; do
-                matrix_items+=("{\"extension\": \"$ext\", \"pgrx_version\": \"$PGRX_VERSION\", \"extension_version\": \"$EXT_VERSION\"}")
-              done <<< "$versions"
+            IFS='|' read -r PGRX_VERSION EXT_VERSION <<< "$(get_pgrx_version "$ext")"
+            
+            # Rimuovi il ciclo interno su pg_version
+            matrix_items+=("{\"extension\": \"$ext\", \"pgrx_version\": \"$PGRX_VERSION\", \"extension_version\": \"$EXT_VERSION\"}")
             done < <(yq eval '.extensions | keys[]' extensions.yml)
           
             matrix=$(printf '%s\n' "${matrix_items[@]}" | jq -s '{include: .}')
+    
           fi
           
           echo "matrix=$(echo $matrix | jq -c .)" >> $GITHUB_OUTPUT
@@ -124,7 +120,6 @@ jobs:
           fi
                
           echo "Processing matrix..."
-          echo "$matrix" | jq -r '.include[] | "\(.pg_version):\(.pgrx_version)"'
           
           unique_combinations=$(echo "$matrix" | \
             jq -r '.include[] | "\(.pgrx_version)"' | \
@@ -146,9 +141,16 @@ jobs:
 
   build-pgrx:
     needs: init-build-images
-    runs-on: ubuntu-latest
+    runs-on:
+      - ${{ matrix.platform == 'linux/arm64' && 'ubuntu-latest-arm64' || 'ubuntu-latest' }}
+      - ${{ matrix.platform }}
     strategy:
-      matrix: ${{ fromJson(needs.init-build-images.outputs.matrix) }}
+      matrix:
+        include:
+          - platform: linux/amd64
+          - platform: linux/arm64
+        pgrx_version: ${{ fromJson(needs.init-build-images.outputs.matrix).include[*].pgrx_version }}
+      max-parallel: 2
       fail-fast: false
     steps:
 
@@ -166,11 +168,12 @@ jobs:
         continue-on-error: true
         run: |
           TAG="${{ matrix.pgrx_version }}"
-          if docker manifest inspect "quay.io/opsio/pgrx:${TAG}" > /dev/null 2>&1; then
-            echo "Image exist"
+          PLATFORM="${{ matrix.platform }}"
+          if docker manifest inspect "quay.io/opstdio/pgrx:${TAG}" --platform "${PLATFORM}" > /dev/null 2>&1; then
+            echo "Image exist for ${PLATFORM}"
             echo "exists=true" >> $GITHUB_OUTPUT
           else
-            echo "Build needed"
+            echo "Build needed for ${PLATFORM}"
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
@@ -187,8 +190,8 @@ jobs:
         run: |
           docker buildx build \
             --build-arg PGRX_VERSION=${{ matrix.pgrx_version }} \
-            --platform linux/amd64,linux/arm64 \
+            --platform ${{ matrix.platform }} \
             --output "type=image,push=true" \
-            --tag quay.io/opsio/pgrx:${{ matrix.pgrx_version }}\
+            --tag quay.io/opstdio/pgrx:${{ matrix.pgrx_version }} \
             --file ./docker/pgrx/Dockerfile ./docker/pgrx \
             --progress=plain
