@@ -233,6 +233,7 @@ jobs:
     needs: [ init-build-images, build-pgrx ]
     runs-on: ubuntu-latest
     steps:
+      - uses: ./.github/actions/install-tools
       - name: Login to Quay.io
         uses: docker/login-action@v3
         with:
@@ -245,20 +246,27 @@ jobs:
 
       - name: Create Multi-Arch Manifest
         run: |
-          # Ottieni le versioni univoche dalla matrice originale
+          # Ottieni le versioni univoche dalla matrice
           VERSIONS=$(echo '${{ toJson(needs.init-build-images.outputs.matrix) }}' | jq -r '.include[].pgrx_version' | sort -u)
-
+          
           for VERSION in $VERSIONS; do
-            # Trova tutte le architetture per questa versione
-            ARCH_IMAGES=$(docker buildx imagetools inspect "quay.io/opstdio/pgrx:${VERSION}-amd64" > /dev/null 2>&1 && echo "-t quay.io/opstdio/pgrx:${VERSION}-amd64" || true)
-            ARCH_IMAGES+=$(docker buildx imagetools inspect "quay.io/opstdio/pgrx:${VERSION}-arm64" > /dev/null 2>&1 && echo " -t quay.io/opstdio/pgrx:${VERSION}-arm64" || true)
-
-            if [ -n "$ARCH_IMAGES" ]; then
-              echo "Creazione manifest per versione $VERSION"
+            ARCH_IMAGES=()
+          
+            if docker buildx imagetools inspect "quay.io/opstdio/pgrx:${VERSION}-amd64" > /dev/null 2>&1; then
+              ARCH_IMAGES+=("quay.io/opstdio/pgrx:${VERSION}-amd64")
+            fi
+          
+            if docker buildx imagetools inspect "quay.io/opstdio/pgrx:${VERSION}-arm64" > /dev/null 2>&1; then
+              ARCH_IMAGES+=("quay.io/opstdio/pgrx:${VERSION}-arm64")
+            fi
+          
+            if [ ${#ARCH_IMAGES[@]} -gt 0 ]; then
+              echo "Creating Manifest for $VERSION"
               docker buildx imagetools create \
-                -t quay.io/opstdio/pgrx:$VERSION \
-                $ARCH_IMAGES
+                -t "quay.io/opstdio/pgrx:$VERSION" \
+                "${ARCH_IMAGES[@]}"
             else
-              echo "Nessuna immagine trovata per la versione $VERSION"
+              echo "No images for $VERSION"
             fi
           done
+        
