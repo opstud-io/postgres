@@ -225,49 +225,40 @@ jobs:
 
           # Crea un file di lock unico per job
           LOCK_FILE="/tmp/pgrx_build_${{ matrix.pgrx_version }}_$ARCH.lock"
-          touch "$LOCK_FILE"
+          touch "$LOCK_FILE"      
+
+
+
+  create-multi-arch-manifest:
+    needs: [ init-build-images, build-pgrx ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Create Multi-Arch Manifest
-        if: ${{ !cancelled() }}
         run: |
-          # Usa un file di coordinamento globale per sincronizzazione
-          COORDINATION_DIR="/tmp/pgrx_coordination"
-          mkdir -p "$COORDINATION_DIR"
-          
-          VERSIONS=$(echo '${{ toJson(strategy.matrix) }}' | jq -r '.include[].pgrx_version' | sort -u)
-          
-          for VERSION in $VERSIONS; do
-            # Crea un lock file per la versione
-            VERSION_LOCK="$COORDINATION_DIR/$VERSION.lock"
-          
-            # Implementa un meccanismo di blocco distribuito
-            (
-              # Acquisisce un lock esclusivo per questa versione
-              flock -x 200
-          
-              # Conta i job per questa versione
-              TOTAL_JOBS=$(echo '${{ toJson(strategy.matrix) }}' | jq -c "[.include[] | select(.pgrx_version == \"$VERSION\")] | length")
-          
-              # Aspetta che tutti i job per questa versione siano completati
-              while [ $(find /tmp -name "pgrx_build_${VERSION}_*.lock" | wc -l) -lt "$TOTAL_JOBS" ]; do
-                echo "Waiting for all jobs for version $VERSION to complete..."
-                sleep 10
-              done
-          
-              # Crea il manifest multi-architettura per questa versione
-              ARCH_IMAGES=$(find /tmp -name "pgrx_build_${VERSION}_*.lock" | while read lockfile; do
-                ARCH=$(echo "$lockfile" | sed -n 's/.*_\([^_]*\)\.lock$/\1/p')
-                if docker buildx imagetools inspect "quay.io/opstdio/pgrx:${VERSION}-$ARCH" > /dev/null 2>&1; then
-                  echo "-t quay.io/opstdio/pgrx:${VERSION}-$ARCH"
-                fi
-              done)
-          
-              if [ -n "$ARCH_IMAGES" ]; then
-                # Utilizza un comando atomico per evitare race condition
-                docker buildx imagetools create \
-                  -t quay.io/opstdio/pgrx:$VERSION \
-                  $ARCH_IMAGES
-              fi
-            ) 200>"$VERSION_LOCK"
-        
+          # Ottieni le versioni univoche dalla matrice originale
+          VERSIONS=$(echo '${{ toJson(needs.init-build-images.outputs.matrix) }}' | jq -r '.include[].pgrx_version' | sort -u)
 
+          for VERSION in $VERSIONS; do
+            # Trova tutte le architetture per questa versione
+            ARCH_IMAGES=$(docker buildx imagetools inspect "quay.io/opstdio/pgrx:${VERSION}-amd64" > /dev/null 2>&1 && echo "-t quay.io/opstdio/pgrx:${VERSION}-amd64" || true)
+            ARCH_IMAGES+=$(docker buildx imagetools inspect "quay.io/opstdio/pgrx:${VERSION}-arm64" > /dev/null 2>&1 && echo " -t quay.io/opstdio/pgrx:${VERSION}-arm64" || true)
+
+            if [ -n "$ARCH_IMAGES" ]; then
+              echo "Creazione manifest per versione $VERSION"
+              docker buildx imagetools create \
+                -t quay.io/opstdio/pgrx:$VERSION \
+                $ARCH_IMAGES
+            else
+              echo "Nessuna immagine trovata per la versione $VERSION"
+            fi
+          done
