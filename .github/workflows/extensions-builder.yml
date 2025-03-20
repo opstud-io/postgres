@@ -175,7 +175,15 @@ jobs:
         run: |
           TAG="${{ matrix.pgrx_version }}"
           PLATFORM="${{ matrix.platform }}"
-          if docker manifest inspect "quay.io/opstdio/pgrx:${TAG}" --platform "${PLATFORM}" > /dev/null 2>&1; then
+          
+          ARCH=$(echo "$PLATFORM" | cut -d'/' -f2)
+          OS=$(echo "$PLATFORM" | cut -d'/' -f1)
+          
+          MANIFEST=$(docker manifest inspect "quay.io/opstdio/pgrx:${TAG}")
+          
+          PLATFORM_EXISTS=$(echo "$MANIFEST" | jq -r '.manifests[] | select(.platform.architecture == "'"$ARCH"'" and .platform.os == "'"$OS"'") | length > 0')
+          
+          if [ "$PLATFORM_EXISTS" = "true" ]; then
             echo "Image exist for ${PLATFORM}"
             echo "exists=true" >> $GITHUB_OUTPUT
           else
