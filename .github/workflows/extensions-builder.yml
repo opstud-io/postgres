@@ -177,21 +177,29 @@ jobs:
         run: |
           TAG="${{ matrix.pgrx_version }}"
           PLATFORM="${{ matrix.platform }}"
-          
+
           ARCH=$(echo "$PLATFORM" | cut -d'/' -f2)
           OS=$(echo "$PLATFORM" | cut -d'/' -f1)
-          
-          MANIFEST=$(docker manifest inspect "quay.io/opstdio/pgrx:${TAG}")
-          
-          PLATFORM_EXISTS=$(echo "$MANIFEST" | jq -r '.manifests[] | select(.platform.architecture == "'"$ARCH"'" and .platform.os == "'"$OS"'") | length > 0')
-          
-          if [ "$PLATFORM_EXISTS" = "true" ]; then
+
+          # Verifica se l'immagine specifica per architettura esiste
+          if docker manifest inspect "quay.io/opstdio/pgrx:${TAG}-${ARCH}" > /dev/null 2>&1; then
             echo "Image exist for ${PLATFORM}"
             echo "exists=true" >> $GITHUB_OUTPUT
           else
-            echo "Build needed for ${PLATFORM}"
-            echo "exists=false" >> $GITHUB_OUTPUT
+            # Se non esiste, prova a verificare il manifest multi-architettura
+            MANIFEST=$(docker manifest inspect "quay.io/opstdio/pgrx:${TAG}" || echo "{}")
+
+            PLATFORM_EXISTS=$(echo "$MANIFEST" | jq -r --arg ARCH "$ARCH" --arg OS "$OS" '.manifests[] | select(.platform.architecture == $ARCH and .platform.os == $OS) | length > 0')
+
+            if [ "$PLATFORM_EXISTS" = "true" ]; then
+              echo "Image exist in multi-arch manifest for ${PLATFORM}"
+              echo "exists=true" >> $GITHUB_OUTPUT
+            else
+              echo "Build needed for ${PLATFORM}"
+              echo "exists=false" >> $GITHUB_OUTPUT
+            fi
           fi
+      
 
       - name: Set up QEMU
         if: steps.check_image.outputs.exists != 'true'
@@ -204,10 +212,62 @@ jobs:
       - name: Docker Buildx
         if: steps.check_image.outputs.exists != 'true'
         run: |
+          ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
+
+          # Costruisci l'immagine per la piattaforma corrente
           docker buildx build \
             --build-arg PGRX_VERSION=${{ matrix.pgrx_version }} \
             --platform ${{ matrix.platform }} \
             --output "type=image,push=true" \
-            --tag quay.io/opstdio/pgrx:${{ matrix.pgrx_version }} \
+            --tag quay.io/opstdio/pgrx:${{ matrix.pgrx_version }}-$ARCH \
             --file ./docker/pgrx/Dockerfile ./docker/pgrx \
             --progress=plain
+
+          # Crea un file di lock unico per job
+          LOCK_FILE="/tmp/pgrx_build_${{ matrix.pgrx_version }}_$ARCH.lock"
+          touch "$LOCK_FILE"
+
+      - name: Create Multi-Arch Manifest
+        if: ${{ !cancelled() }}
+        run: |
+          # Usa un file di coordinamento globale per sincronizzazione
+          COORDINATION_DIR="/tmp/pgrx_coordination"
+          mkdir -p "$COORDINATION_DIR"
+          
+          VERSIONS=$(echo '${{ toJson(strategy.matrix) }}' | jq -r '.include[].pgrx_version' | sort -u)
+          
+          for VERSION in $VERSIONS; do
+            # Crea un lock file per la versione
+            VERSION_LOCK="$COORDINATION_DIR/$VERSION.lock"
+          
+            # Implementa un meccanismo di blocco distribuito
+            (
+              # Acquisisce un lock esclusivo per questa versione
+              flock -x 200
+          
+              # Conta i job per questa versione
+              TOTAL_JOBS=$(echo '${{ toJson(strategy.matrix) }}' | jq -c "[.include[] | select(.pgrx_version == \"$VERSION\")] | length")
+          
+              # Aspetta che tutti i job per questa versione siano completati
+              while [ $(find /tmp -name "pgrx_build_${VERSION}_*.lock" | wc -l) -lt "$TOTAL_JOBS" ]; do
+                echo "Waiting for all jobs for version $VERSION to complete..."
+                sleep 10
+              done
+          
+              # Crea il manifest multi-architettura per questa versione
+              ARCH_IMAGES=$(find /tmp -name "pgrx_build_${VERSION}_*.lock" | while read lockfile; do
+                ARCH=$(echo "$lockfile" | sed -n 's/.*_\([^_]*\)\.lock$/\1/p')
+                if docker buildx imagetools inspect "quay.io/opstdio/pgrx:${VERSION}-$ARCH" > /dev/null 2>&1; then
+                  echo "-t quay.io/opstdio/pgrx:${VERSION}-$ARCH"
+                fi
+              done)
+          
+              if [ -n "$ARCH_IMAGES" ]; then
+                # Utilizza un comando atomico per evitare race condition
+                docker buildx imagetools create \
+                  -t quay.io/opstdio/pgrx:$VERSION \
+                  $ARCH_IMAGES
+              fi
+            ) 200>"$VERSION_LOCK"
+        
+
