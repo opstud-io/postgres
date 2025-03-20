@@ -41,7 +41,7 @@ jobs:
             local cache_key="$ext-repo"
             local cache_path="$CACHE_DIR/$cache_key"
             
-            local yml_pgrx_version=$(yq e ".extensions.$ext.pgrx_version" extensions.yml)
+            local yml_pgrx_version=$(yq e ".extensions.$ext.pgrx_version // \"\"" extensions.yml)
 
             # Verifica se esiste già nella cache
             if [ -d "$cache_path" ]; then
@@ -60,8 +60,9 @@ jobs:
             local pgrx_version=$(
               awk -F'"' '/^pgrx = "[0-9]/ {print $2; exit}' "$cache_path/Cargo.toml"
             )
-            pgrx_version=${yml_pgrx_version:-$pgrx_version}
             pgrx_version=${pgrx_version:-"0.13.1"}
+            pgrx_version=${yml_pgrx_version:-$pgrx_version}
+            
 
             local ext_version=$(
               awk -F'"' '/^version = / {print $2; exit}' "$cache_path/Cargo.toml"
