@@ -123,10 +123,20 @@ jobs:
             sort -u)
           
           
-          build_matrix=$(echo "$unique_combinations" | \
-            jq -R -s -c 'split("\n")[:-1] | map({"pgrx_version": .}) |
-            {"include": .}')
-
+          build_matrix=$(echo "$matrix" | \
+            jq -c '.include | 
+            map({
+              "pgrx_version": .pgrx_version, 
+              "platform": "linux/amd64"
+            }) + 
+            map({
+              "pgrx_version": .pgrx_version, 
+              "platform": "linux/arm64"
+            }) | 
+            {
+              "include": .
+            }')
+          
           
           if echo "$build_matrix" | jq empty; then
             echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
@@ -143,11 +153,7 @@ jobs:
        matrix.platform == 'linux/amd64' && 'ubuntu-latest'
     }}
     strategy:
-      matrix:
-        platform:
-          - linux/amd64
-          - linux/arm64
-        pgrx_version: ${{ fromJson(needs.init-build-images.outputs.matrix).include[*].pgrx_version }}
+      matrix: ${{ fromJson(needs.init-build-images.outputs.matrix) }}
       max-parallel: 6
       fail-fast: false
     steps:
