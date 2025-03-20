@@ -144,11 +144,10 @@ jobs:
     }}
     strategy:
       matrix:
-        include:
-          platform:
-            - linux/amd64
-            - linux/arm64
-          pgrx_version: ${{ fromJson(needs.init-build-images.outputs.matrix).include[*].pgrx_version }}
+        platform:
+          - linux/amd64
+          - linux/arm64
+        pgrx_version: ${{ fromJson(needs.init-build-images.outputs.matrix).include[*].pgrx_version }}
       max-parallel: 6
       fail-fast: false
     steps:
