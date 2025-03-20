@@ -148,20 +148,22 @@ jobs:
   build-pgrx:
     needs: init-build-images
     runs-on: ${{
-       matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' ||
-       matrix.platform == 'linux/amd64' && 'ubuntu-latest'
+               matrix.platform == 'linux/arm64'
+               ? 'ubuntu-24.04-arm'
+      : (matrix.platform == 'linux/amd64'
+               ? 'ubuntu-latest'
+      : 'ubuntu-latest')
     }}
     strategy:
       matrix: ${{ fromJson(needs.init-build-images.outputs.matrix) }}
-      max-parallel: 6
       fail-fast: false
     steps:
+      - uses: actions/checkout@v4
+
       - name: Debug Matrix
         run: |
           echo "Platform: ${{ matrix.platform }}"
           echo "Pgrx Version: ${{ matrix.pgrx_version }}"
-
-      - uses: actions/checkout@v4
 
       - name: Login to Quay.io
         uses: docker/login-action@v3
