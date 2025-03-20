@@ -16,5 +16,6 @@ get_pg_config() {
 }
 
 config_value=$(get_pg_config $PSQL_VERSION)
+features_value=pg$PSQL_VERSION $FEATURES
 
-cargo pgrx package -c $config_value
+cargo pgrx package -c $config_value --no-default-features --features $FEATURES
