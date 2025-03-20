@@ -7,9 +7,6 @@ on:
       extension:
         description: 'Specific extension to build (leave blank for all)'
         required: false
-      pg_version:
-        description: 'PostgreSQL Version'
-        required: false
 jobs:
   setup:
     runs-on: ubuntu-latest
