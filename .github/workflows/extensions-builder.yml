@@ -288,7 +288,7 @@ jobs:
         
 
 
-  make-matix-build-extensions:
+  make-matrix-build-extensions:
     needs: [ setup, create-multi-arch-manifest ]
     runs-on: ubuntu-latest
     outputs:
@@ -312,19 +312,31 @@ jobs:
               extension: .[0].extension,
               pgrx_version: .[0].pgrx_version,
               extension_version: .[0].extension_version,
+              "platform": "linux/amd64"
+              pg_versions: map(.pg_version) | unique
+            })+map({
+              extension: .[0].extension,
+              pgrx_version: .[0].pgrx_version,
+              extension_version: .[0].extension_version,
+              "platform": "linux/arm64"
               pg_versions: map(.pg_version) | unique
             }) |
               {
                 "include": .
               }')
           
-          echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
+          if echo "$build_matrix" | jq empty; then
+            echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
+          else
+            echo "Error: Invalid JSON matrix generated"
+            exit 1
+          fi
 
-  build-extensions:
-    needs: make-matix-build-extensions
+  build-extensions-arch:
+    needs: make-matrix-build-extensions
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(needs.make-matix-build-extensions.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.make-matrix-build-extensions.outputs.matrix) }}
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
