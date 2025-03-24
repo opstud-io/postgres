@@ -306,25 +306,22 @@ jobs:
           fi
           build_matrix=$(echo "$matrix" | \
               jq -c '
-              .include |
-              group_by(.extension) |
-              map({
-              extension: .[0].extension,
-              pgrx_version: .[0].pgrx_version,
-              extension_version: .[0].extension_version,
-              "platform": "linux/amd64"
-              pg_versions: map(.pg_version) | unique
-            })+map({
-              extension: .[0].extension,
-              pgrx_version: .[0].pgrx_version,
-              extension_version: .[0].extension_version,
-              "platform": "linux/arm64"
-              pg_versions: map(.pg_version) | unique
-            }) |
-              {
-                "include": .
-              }')
-          
+                .include | 
+                  group_by(.extension) |
+                  map({
+                    "extension": .[0].extension,
+                    "pgrx_version": .[0].pgrx_version,
+                    "extension_version": .[0].extension_version,
+                    "pg_versions": map(.pg_version) | unique
+                  }) |
+                  map(. + {"platform": "linux/amd64"}) +
+                  map(. + {"platform": "linux/arm64"}) |
+                  {
+                    "include": .
+                  }')
+    
+    
+    
           if echo "$build_matrix" | jq empty; then
             echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
           else
