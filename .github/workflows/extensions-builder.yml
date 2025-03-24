@@ -339,6 +339,20 @@ jobs:
           echo "Matrix:"
           echo '${{ toJson(matrix) }}' | jq '.'
 
+      - id: setup-cache
+        run: |
+          echo "date=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
+          echo "cache-dir=.repo-cache" >> $GITHUB_OUTPUT
+
+      - name: Cache Repository Info
+        uses: actions/cache@v4
+        id: repo-cache
+        with:
+          path: ${{ steps.setup-cache.outputs.cache-dir }}
+          key: repo-cache-${{ steps.setup-cache.outputs.date }}
+          restore-keys: |
+            repo-cache-
+
       - name: Debug Extension Build
         run: |
           CACHE_DIR="${{ steps.setup-cache.outputs.cache-dir }}/${{ matrix.extension }}-repo"
