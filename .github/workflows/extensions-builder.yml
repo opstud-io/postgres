@@ -130,18 +130,21 @@ jobs:
             sort -u)
           
           build_matrix=$(echo "$matrix" | \
-            jq -c '.include | 
-            map({
-              "pgrx_version": .pgrx_version, 
+              jq -c --argjson unique_versions "[$( echo "$unique_pgrx_versions" | sed 's/^/"/; s/$/"/; tr '\n' ',' | sed 's/,$//' )]" '
+              .include |
+              map(select(.pgrx_version | IN($unique_versions[]))) |
+              map({
+              "pgrx_version": .pgrx_version,
               "platform": "linux/amd64"
-            }) + 
-            map({
-              "pgrx_version": .pgrx_version, 
+            }) +
+              map({
+              "pgrx_version": .pgrx_version,
               "platform": "linux/arm64"
-            }) | 
-            {
-              "include": .
-            }')
+            }) |
+              {
+                "include": .
+              }')
+
           
           if echo "$build_matrix" | jq empty; then
             echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
