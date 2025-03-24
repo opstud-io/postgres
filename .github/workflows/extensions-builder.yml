@@ -289,7 +289,7 @@ jobs:
 
 
   make-matrix-build-extensions:
-    needs: [ setup, create-multi-arch-manifest ]
+    needs: [ setup, build-pgrx ]
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -306,14 +306,7 @@ jobs:
           fi
           build_matrix=$(echo "$matrix" | \
               jq -c '
-                .include | 
-                  group_by(.extension) |
-                  map({
-                    "extension": .[0].extension,
-                    "pgrx_version": .[0].pgrx_version,
-                    "extension_version": .[0].extension_version,
-                    "pg_versions": map(.pg_version) | unique
-                  }) |
+                .include |
                   map(. + {"platform": "linux/amd64"}) +
                   map(. + {"platform": "linux/arm64"}) |
                   {
@@ -331,7 +324,11 @@ jobs:
 
   build-extensions-arch:
     needs: make-matrix-build-extensions
-    runs-on: ubuntu-latest
+    runs-on: ${{
+        matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' ||
+        matrix.platform == 'linux/amd64' && 'ubuntu-latest' ||
+        'ubuntu-latest'
+      }}
     strategy:
       matrix: ${{ fromJson(needs.make-matrix-build-extensions.outputs.matrix) }}
       fail-fast: false
