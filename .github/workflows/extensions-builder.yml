@@ -333,6 +333,36 @@ jobs:
           echo "Matrix:"
           echo '${{ toJson(matrix) }}' | jq '.'
 
+      - name: Set up Docker image cache
+        uses: actions/cache@v4
+        id: docker-image-cache
+        with:
+          path: /tmp/docker-images
+          key: docker-pgrx-${{ matrix.pgrx_version }}-${{ matrix.platform }}-v1
+          restore-keys: |
+            docker-pgrx-${{ matrix.pgrx_version }}-${{ matrix.platform }}
+            
+            - name: Prepare Docker Image
+        run: |
+          ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
+          IMAGE="quay.io/opstdio/pgrx:${{ matrix.pgrx_version }}-$ARCH"
+          CACHE_FILE="/tmp/docker-images/pgrx-${{ matrix.pgrx_version }}-$ARCH.tar"
+
+          # Prova a caricare l'immagine cached
+          if [ -f "$CACHE_FILE" ]; then
+            echo "Caricamento immagine Docker cached"
+            docker load -i "$CACHE_FILE"
+          else
+            echo "Scaricamento nuova immagine Docker"
+            docker pull "$IMAGE"
+          
+            # Assicurati che la directory esista
+            mkdir -p /tmp/docker-images
+          
+            # Salva l'immagine per usi futuri
+            docker save "$IMAGE" > "$CACHE_FILE"
+          fi
+
       - id: setup-cache
         run: |
           echo "date=$(date +%Y%m%d)" >> $GITHUB_OUTPUT
@@ -362,8 +392,9 @@ jobs:
           
           mkdir -p "$CACHE_DIR/target/release"
           mkdir -p "$CACHE_DIR/target/pgrx"
-    
-    
+          chmod 777 "$CACHE_DIR"          
+          
+          
           # Usa l'immagine pre-buildata con tag specifico per architettura
           docker run --rm \
             -v "$CACHE_DIR":/usr/src/app \
