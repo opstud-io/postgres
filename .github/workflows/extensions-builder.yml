@@ -71,23 +71,30 @@ jobs:
           }
       
           if [ "${{ github.event.inputs.extension }}" != "" ]; then
-
-          
             IFS='|' read -r PGRX_VERSION EXT_VERSION <<< "$(get_pgrx_version "${{ github.event.inputs.extension }}")"
-          
-            matrix=$(jq -n \
-              --arg ext "${{ github.event.inputs.extension }}" \
-              --arg pgrx "$PGRX_VERSION" \
-              --arg ext_ver "$EXT_VERSION" \
-              '{include: [{"extension": $ext, "pgrx_version": $pgrx, "extension_version": $ext_ver}]}')
+    
+            # Ottieni le versioni PostgreSQL per l'estensione specifica
+            PG_VERSIONS=$(yq eval ".extensions.${{ github.event.inputs.extension }}.pg_versions[]" extensions.yml)
+            
+            # Genera matrix con tutte le versioni PostgreSQL
+            matrix_items=()
+            for PG_VERSION in $PG_VERSIONS; do
+            matrix_items+=("{\"extension\": \"${{ github.event.inputs.extension }}\", \"pgrx_version\": \"$PGRX_VERSION\", \"extension_version\": \"$EXT_VERSION\", \"pg_version\": \"$PG_VERSION\"}")
+            done
+            
+            matrix=$(printf '%s\n' "${matrix_items[@]}" | jq -s '{include: .}')
+              
           else
             matrix_items=()
 
             while IFS= read -r ext; do
-            IFS='|' read -r PGRX_VERSION EXT_VERSION <<< "$(get_pgrx_version "$ext")"
-            
-            # Rimuovi il ciclo interno su pg_version
-            matrix_items+=("{\"extension\": \"$ext\", \"pgrx_version\": \"$PGRX_VERSION\", \"extension_version\": \"$EXT_VERSION\"}")
+              IFS='|' read -r PGRX_VERSION EXT_VERSION <<< "$(get_pgrx_version "$ext")"
+              PG_VERSIONS=$(yq eval ".extensions.$ext.pg_versions[]" extensions.yml)          
+          
+              # Rimuovi il ciclo interno su pg_version
+              for PG_VERSION in $PG_VERSIONS; do
+                matrix_items+=("{\"extension\": \"$ext\", \"pgrx_version\": \"$PGRX_VERSION\", \"extension_version\": \"$EXT_VERSION\", \"pg_version\": \"$PG_VERSION\"}")
+              done
             done < <(yq eval '.extensions | keys[]' extensions.yml)
           
             matrix=$(printf '%s\n' "${matrix_items[@]}" | jq -s '{include: .}')
@@ -279,3 +286,4 @@ jobs:
             fi
           done
         
+
