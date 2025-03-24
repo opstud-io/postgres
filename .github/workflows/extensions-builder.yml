@@ -339,6 +339,14 @@ jobs:
           echo "Matrix:"
           echo '${{ toJson(matrix) }}' | jq '.'
 
+      - name: Debug Extension Build
+        run: |
+          CACHE_DIR="${{ steps.setup-cache.outputs.cache-dir }}/${{ matrix.extension }}-repo"
+          echo "Contenuto di $CACHE_DIR:"
+          ls -la "$CACHE_DIR"
+          echo "Contenuto di $CACHE_DIR/target:"
+          ls -la "$CACHE_DIR/target" || true
+
       - name: Prepare Multi-Arch Compilation
         run: |
           CACHE_DIR="${{ steps.setup-cache.outputs.cache-dir }}/${{ matrix.extension }}-repo"
