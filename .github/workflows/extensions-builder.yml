@@ -241,7 +241,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/install-tools
 
       - name: Login to Quay.io
         uses: docker/login-action@v3
@@ -295,7 +294,6 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/install-tools
       - name: Generate matrix
         id: set-matrix
         run: |
