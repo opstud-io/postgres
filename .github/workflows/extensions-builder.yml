@@ -365,14 +365,17 @@ jobs:
         run: |
           CACHE_DIR="${{ steps.setup-cache.outputs.cache-dir }}/${{ matrix.extension }}-repo"
           ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
-
+          
+          mkdir -p "$CACHE_DIR/target/release"
+          mkdir -p "$CACHE_DIR/target/pgrx"
+    
+    
           # Usa l'immagine pre-buildata con tag specifico per architettura
           docker run --rm \
             -v "$CACHE_DIR":/usr/src/app \
             -e PSQL_VERSION=${{ matrix.pg_version }} \
             --platform ${{ matrix.platform }} \
-            quay.io/opstdio/pgrx:${{ matrix.pgrx_version }}-$ARCH \
-            pgrx-package
+            quay.io/opstdio/pgrx:${{ matrix.pgrx_version }}-$ARCH
 
       - name: Organize Build Artifacts
         run: |
