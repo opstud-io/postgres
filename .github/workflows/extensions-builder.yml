@@ -124,27 +124,24 @@ jobs:
           fi
                
           echo "Processing matrix..."
-          
-          unique_pgrx_versions=$(echo "$matrix" | \
-            jq -r '.include[] | .pgrx_version' | \
-            sort -u)
-            
+                    
           build_matrix=$(echo "$matrix" | \
-            jq -c --arg unique_versions "$(echo "$unique_pgrx_versions" | tr '\n' '|' | sed 's/|$//')" '
-            .include |
-            map(select(.pgrx_version | test($unique_versions))) |
-            map({
+              jq -c '
+              .include |
+              unique_by(.pgrx_version) |
+              map({
               "pgrx_version": .pgrx_version,
               "platform": "linux/amd64"
             }) +
-            map({
+              map({
               "pgrx_version": .pgrx_version,
               "platform": "linux/arm64"
             }) |
-            {
-              "include": .
-            }')
+              {
+                "include": .
+              }')
 
+          
           
           if echo "$build_matrix" | jq empty; then
             echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
