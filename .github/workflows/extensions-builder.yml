@@ -403,6 +403,7 @@ jobs:
             -v "$CACHE_DIR":/usr/src/app \
             -e PSQL_VERSION=${{ matrix.pg_version }} \
             --platform ${{ matrix.platform }} \
+            --user $(id -u):$(id -g) \ 
             quay.io/opstdio/pgrx:${{ matrix.pgrx_version }}-$ARCH
 
       - name: Organize Build Artifacts
