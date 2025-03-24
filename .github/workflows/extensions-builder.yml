@@ -320,14 +320,14 @@ jobs:
           
           echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
 
-      build-extensions:
-        needs: make-matix-build-extensions
-        runs-on: ubuntu-latest
-        strategy:
-          matrix: ${{ fromJson(needs.make-matix-build-extensions.outputs.matrix) }}
-          fail-fast: false
-        steps:
-          - uses: actions/checkout@v4
-          - name: Debug Matrix
-            run: |
-              echo "Matrix: ${{ matrix }}"
+  build-extensions:
+    needs: make-matix-build-extensions
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.make-matix-build-extensions.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Debug Matrix
+        run: |
+          echo "Matrix: ${{ matrix }}"
