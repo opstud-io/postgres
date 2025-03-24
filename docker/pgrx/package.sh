@@ -16,7 +16,8 @@ get_pg_config() {
 }
 
 config_value=$(get_pg_config $PSQL_VERSION)
-if($FEATURES) then
+
+if [ -n "$FEATURES" ]; then
     features_value="--no-default-features --features $FEATURES"
 fi
 
