@@ -342,7 +342,7 @@ jobs:
           restore-keys: |
             docker-pgrx-${{ matrix.pgrx_version }}-${{ matrix.platform }}
             
-            - name: Prepare Docker Image
+      - name: Prepare Docker Image
         run: |
           ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
           IMAGE="quay.io/opstdio/pgrx:${{ matrix.pgrx_version }}-$ARCH"
