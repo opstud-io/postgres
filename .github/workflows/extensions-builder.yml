@@ -361,7 +361,7 @@ jobs:
 
       - name: Prepare Multi-Arch Compilation
         run: |
-          CACHE_DIR="${{ steps.setup-cache.outputs.cache-dir }}/${{ matrix.extension }}-repo"
+          CACHE_DIR="$(readlink -f "${{ steps.setup-cache.outputs.cache-dir }}/${{ matrix.extension }}-repo")"
           ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
           
           mkdir -p "$CACHE_DIR/target/release"
