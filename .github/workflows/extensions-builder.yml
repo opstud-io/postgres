@@ -287,3 +287,47 @@ jobs:
           done
         
 
+
+  make-matix-build-extensions:
+    needs: [ setup, create-multi-arch-manifest ]
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/install-tools
+      - name: Generate matrix
+        id: set-matrix
+        run: |
+          matrix='${{ needs.setup.outputs.matrix }}'
+          if [ -z "$matrix" ]; then
+            echo "Error: Input matrix is empty!"
+            exit 1
+          fi
+          build_matrix=$(echo "$matrix" | \
+              jq -c '
+              .include |
+              group_by(.extension) |
+              map({
+              extension: .[0].extension,
+              pgrx_version: .[0].pgrx_version,
+              extension_version: .[0].extension_version,
+              pg_versions: map(.pg_version) | unique
+            }) |
+              {
+                "include": .
+              }')
+          
+          echo "matrix=$build_matrix" >> $GITHUB_OUTPUT
+
+    build-extensions:
+      needs: make-matix-build-extensions
+      runs-on: ubuntu-latest
+      strategy:
+        matrix: ${{ fromJson(needs.make-matix-build-extensions.outputs.matrix) }}
+        fail-fast: false
+      steps:
+        - uses: actions/checkout@v4
+        - name: Debug Matrix
+          run: |
+            echo "Matrix: ${{ matrix }}"
