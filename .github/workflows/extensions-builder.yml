@@ -338,12 +338,30 @@ jobs:
         run: |
           echo "Matrix:"
           echo '${{ toJson(matrix) }}' | jq '.'
-      - name: Run Pgrx Docker Container
+
+      - name: Prepare Multi-Arch Compilation
         run: |
           CACHE_DIR="${{ steps.setup-cache.outputs.cache-dir }}/${{ matrix.extension }}-repo"
-    
-          docker run --rm -it -v "$CACHE_DIR":/usr/src/app \
+          ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
+
+          # Usa l'immagine pre-buildata con tag specifico per architettura
+          docker run --rm \
+            -v "$CACHE_DIR":/usr/src/app \
             -e PSQL_VERSION=${{ matrix.pg_version }} \
-            quay.io/opstdio/pgrx:${{ matrix.pgrx_version }}
+            --platform ${{ matrix.platform }} \
+            quay.io/opstdio/pgrx:${{ matrix.pgrx_version }}-$ARCH \
+            pgrx-package
+
+      - name: Organize Build Artifacts
+        run: |
+          CACHE_DIR="${{ steps.setup-cache.outputs.cache-dir }}/${{ matrix.extension }}-repo"
+          ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
+          ARTIFACTS_DIR="${CACHE_DIR}/target/releases/${{ matrix.platform }}"
+
+          # Crea directory per gli artifact specifici dell'architettura
+          mkdir -p "$ARTIFACTS_DIR"
+
+          # Sposta gli artefatti compilati nella directory specifica
+          mv "$CACHE_DIR/target/release"/* "$ARTIFACTS_DIR/"
 
       
